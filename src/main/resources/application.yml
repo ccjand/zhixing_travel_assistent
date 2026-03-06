@@ -1,0 +1,103 @@
+spring:
+    application:
+        name: zhixing_travel_assistant
+    datasource:
+        url: jdbc:postgresql://115.190.249.67:15432/travel_planner_db
+        username: root
+        password: 32e1615de259f13b3ad7
+        driver-class-name: org.postgresql.Driver
+
+
+    mail:
+        host: smtp.qq.com
+        port: 587
+        username: 3177587750@qq.com
+        password: cjsiuuyjtmzhdfjb
+        properties:
+            mail:
+                smtp:
+                    auth: true
+                    starttls:
+                        enable: true
+                        required: true
+    data:
+        redis:
+            host: 115.190.249.67
+            port: 17379
+            password: 20020104CCjj+1
+            timeout: 60000
+
+mybatis-plus:
+    configuration:
+        map-underscore-to-camel-case: true
+        log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+    global-config:
+        db-config:
+            id-type: assign_uuid
+
+
+
+server:
+    port: 10010
+    servlet:
+        context-path: /api
+
+logging:
+    level:
+        org.mybatis: WARN
+        com.baomidou.mybatisplus: WARN
+        dev.langchain4j.mcp: ERROR
+
+
+langchain4j:
+    community:
+        dashscope:
+            chat-model:
+                model-name: qwen3-max
+                api-key: sk-54ab7faa58f643609429a42b08defa09
+            embedding-model:
+                model-name: text-embedding-v4
+                api-key: sk-54ab7faa58f643609429a42b08defa09
+            streaming-chat-model:
+                model-name: qwen3-max
+                api-key: sk-54ab7faa58f643609429a42b08defa09
+
+
+pgvector:
+    host: 115.190.249.67
+    port: 15432
+    database: travel_planner_db
+    user: root
+    password: 32e1615de259f13b3ad7
+    table: agent_embeddings
+    drop-table-first: false
+    create-table: true
+
+auth:
+    secret: zhixing_travel_assistant
+
+
+pgcheckpoint:
+    host: 115.190.249.67
+    username: root
+    password: 32e1615de259f13b3ad7
+    database: travel_planner_db
+    port: 15432
+
+rag:
+    docs-path: docs/rag
+    max-results: 8
+    min-score: 0.6
+    fallback-min-score: 0.45
+    parent-context:
+        enabled: true
+        max-results: 4
+    rerank:
+        enabled: false
+    multi-query:
+        enabled: true
+        count: 3
+        max-merged-results: 24
+    hyde:
+        enabled: false
+        max-chars: 600

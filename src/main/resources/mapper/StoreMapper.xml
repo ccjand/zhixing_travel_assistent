@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shanyangcode.zhixing_travel_assistant_backend.mapper.StoreMapper">
+
+    <insert id="upsert">
+        insert into store(namespace, key, value, created_at, updated_at)
+        values (
+                   #{namespace,jdbcType=ARRAY,typeHandler=org.apache.ibatis.type.ArrayTypeHandler},
+                   #{key},
+                   cast(#{jsonValue} as jsonb),
+                   now(),
+                   now()
+               )
+            on conflict(namespace, key)
+        do update set value = excluded.value, updated_at = now()
+    </insert>
+
+</mapper>
