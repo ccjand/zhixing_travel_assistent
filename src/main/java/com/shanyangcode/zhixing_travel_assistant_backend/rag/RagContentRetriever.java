@@ -83,6 +83,31 @@ public class RagContentRetriever implements ContentRetriever {
     @Value("${rag.hybrid.candidate-multiplier:4}")
     private Integer ragHybridCandidateMultiplier;
 
+    // 排序融合策略（对 multi-query 合并后的候选做“统一排序”）：
+    // - rrf：Reciprocal Rank Fusion（默认）。把“语义路排序”和“词面路排序”转成名次再融合，
+    //        对分数尺度不敏感，multi-query/不同 queryVariant 导致的分数分布不一致时更稳。
+    // - hybrid：线性加权。对同一候选同时计算语义分与词面分，按 alpha 融合：
+    //        score = alpha * sem + (1 - alpha) * lex
+    //        更直观可控，但更依赖两路分数尺度相对可比（否则 alpha 难调）。
+    @Value("${rag.rank.mode:rrf}")
+    private String ragRankMode;
+
+    // RRF 常量 k：控制名次差异的“平滑程度”
+    // - k 越大：头部名次差一点带来的分数差异越小（更稳）
+    // - k 越小：更强调头部名次（更激进）
+    // 常见默认取 60 左右。
+    @Value("${rag.rrf.k:60}")
+    private Integer ragRrfK;
+
+    // RRF 融合权重：可以单独调两路贡献
+    // - semantic-weight：语义路（dense/embedding 相似度排序）的权重
+    // - lexical-weight：词面路（lexicalScore 排序）的权重
+    @Value("${rag.rrf.semantic-weight:1.0}")
+    private Double ragRrfSemanticWeight;
+
+    @Value("${rag.rrf.lexical-weight:1.0}")
+    private Double ragRrfLexicalWeight;
+
     @Value("${rag.rerank.enabled:false}")
     private Boolean ragRerankEnabled;
 
@@ -183,9 +208,26 @@ public class RagContentRetriever implements ContentRetriever {
             }
         }
 
-        // 3) Hybrid：关键词打分 + 向量分数融合，得到更稳的排序（不额外依赖索引）
         String originalQuery = query.text().trim();
-        List<Content> merged = RagScorer.hybridRank(originalQuery, candidates, ragHybridEnabled, ragHybridAlpha, mergedLimit);
+        String mode = ragRankMode == null ? "rrf" : ragRankMode.trim();
+        List<Content> merged;
+        if ("rrf".equalsIgnoreCase(mode)) {
+            // RRF：把“语义排序”和“词面排序”分别转为名次，再做融合。
+            // 适合 multi-query 后候选分数分布不一致的情况（更稳、更不吃分数尺度）。
+            merged = RagScorer.rrfRank(
+                    originalQuery,
+                    candidates,
+                    ragHybridEnabled,
+                    ragRrfK,
+                    ragRrfSemanticWeight,
+                    ragRrfLexicalWeight,
+                    mergedLimit
+            );
+        } else {
+            // Hybrid：对同一候选池同时算语义分与词面分，用 alpha 做线性融合。
+            // 更可控，但依赖两路分数尺度相对可比。
+            merged = RagScorer.hybridRank(originalQuery, candidates, ragHybridEnabled, ragHybridAlpha, mergedLimit);
+        }
 
         // 4) Rerank：用 LLM 在 TopN 里再排一遍，只改变顺序
         if (ragRerankEnabled) {
@@ -207,7 +249,8 @@ public class RagContentRetriever implements ContentRetriever {
         // cacheKey = RedisKeys 前缀 + md5(版本|query|metadata)
         // version 用于隔离不同参数/策略下的缓存（手动 bump version 即可整体失效）
         Object meta = query.metadata();
-        String base = ragCacheVersion.trim() + "|" + query.text().trim() + "|" + (meta == null ? "" : meta);
+        String mode = ragRankMode == null ? "hybrid" : ragRankMode.trim().toLowerCase();
+        String base = ragCacheVersion.trim() + "|" + mode + "|" + query.text().trim() + "|" + (meta == null ? "" : meta);
         String digest = md5Hex(base);
         return RedisKeys.getRagCacheKey(digest);
     }
